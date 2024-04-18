@@ -258,6 +258,18 @@ func Provider() tfbridge.ProviderInfo {
 			// Map each resource in the Terraform provider to a Pulumi function. An example
 			// is below.
 			// "aws_ami": {Tok: tfbridge.MakeDataSource(mainPkg, mainMod, "getAmi")},
+			"dynatrace_alerting_profile":    {Tok: dynatraceDataSource(mainMod, "getAlertingProfile")},
+			"dynatrace_alerting_profiles":   {Tok: dynatraceDataSource(mainMod, "getAlertingProfiles")},
+			"dynatrace_application":         {Tok: dynatraceDataSource(mainMod, "getApplication")},
+			"dynatrace_aws_iam_external":    {Tok: dynatraceDataSource(mainMod, "getAwsIamExternal")},
+			"dynatrace_credentials":         {Tok: dynatraceDataSource(mainMod, "getCredentials")},
+			"dynatrace_host":                {Tok: dynatraceDataSource(mainMod, "getHost")},
+			"dynatrace_management_zone":     {Tok: dynatraceDataSource(mainMod, "getManagementZone")},
+			"dynatrace_process":             {Tok: dynatraceDataSource(mainMod, "getProcess")},
+			"dynatrace_process_group":       {Tok: dynatraceDataSource(mainMod, "getProcessGroup")},
+			"dynatrace_service":             {Tok: dynatraceDataSource(mainMod, "getService")},
+			"dynatrace_synthetic_location":  {Tok: dynatraceDataSource(mainMod, "getSyntheticLocation")},
+			"dynatrace_synthetic_locations": {Tok: dynatraceDataSource(mainMod, "getSyntheticLocations")},
 		},
 		JavaScript: &tfbridge.JavaScriptInfo{
 			// List any npm dependencies and their versions
