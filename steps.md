@@ -1,3 +1,5 @@
+1. Update go version to GO_VERSION=1.22.2 in dockerfile
+
 1. make prepare NAME=dynatrace REPOSITORY=github.com/alvaroblazquez4567/pulumi-dynatrace ORG=alvaroblazquez4567
 
 2. In provider/go.mod, add a reference to the upstream Terraform provider in the require section.
@@ -16,3 +18,6 @@ cd provider && go mod tidy && cd -
 
 5. Create the schema by running the following command:
 make tfgen
+
+6. add resource mapping
+6.1 add data source mapping
