@@ -15,17 +15,22 @@
 package dynatrace
 
 import (
-	"path"
+	"path/filepath"
+	"strings"
+	"fmt"
+	"unicode"
 
 	// Allow embedding bridge-metadata.json in the provider.
 	_ "embed"
 
 	"github.com/pulumi/pulumi-terraform-bridge/v3/pkg/tfbridge"
-	"github.com/pulumi/pulumi-terraform-bridge/v3/pkg/tfbridge/tokens"
+	"github.com/pulumi/pulumi-terraform-bridge/v3/pkg/tfbridge/x"
+	//tfbridgeTokens "github.com/pulumi/pulumi-terraform-bridge/v3/pkg/tfbridge/tokens"
 	shim "github.com/pulumi/pulumi-terraform-bridge/v3/pkg/tfshim"
 	shimv2 "github.com/pulumi/pulumi-terraform-bridge/v3/pkg/tfshim/sdk-v2"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
-
+	"github.com/pulumi/pulumi/sdk/v3/go/common/tokens"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/util/contract"
 	// Replace this provider with the provider you are bridging.
 	dynatrace "github.com/dynatrace-oss/terraform-provider-dynatrace/provider"
 
@@ -52,68 +57,87 @@ func preConfigureCallback(resource.PropertyMap, shim.ResourceConfig) error {
 //go:embed cmd/pulumi-resource-dynatrace/bridge-metadata.json
 var metadata []byte
 
+var namespaceMap = map[string]string{
+	"dynatrace": "Dynatrace",
+}
+
+// dynatraceMember manufactures a type token for the Harness package and the given module and type.
+func dynatraceMember(moduleTitle string, fn string, mem string) tokens.ModuleMember {
+	moduleName := strings.ToLower(moduleTitle)
+	namespaceMap[moduleName] = moduleTitle
+	if fn != "" {
+		moduleName += "/" + fn
+	}
+	return tokens.ModuleMember(mainPkg + ":" + moduleName + ":" + mem)
+}
+
+// dynatraceType manufactures a type token for the Launch Darkly package and the given module and type.
+func dynatraceType(mod string, fn string, typ string) tokens.Type {
+	return tokens.Type(dynatraceMember(mod, fn, typ))
+}
+
+func dynatraceTypeDefaultFile(mod string, typ string) tokens.Type {
+	fn := string(unicode.ToLower(rune(typ[0]))) + typ[1:]
+	return dynatraceType(mod, fn, typ)
+}
+
+// dynatraceDataSource manufactures a standard resource token given a module and resource name.
+// It automatically uses the Launch Darkly package and names the file by simply lower casing the data
+// source's first character.
+func dynatraceDataSource(mod string, res string) tokens.ModuleMember {
+	fn := string(unicode.ToLower(rune(res[0]))) + res[1:]
+	return dynatraceMember(mod, fn, res)
+}
+
+// dynatraceResource manufactures a standard resource token given a module and resource name.
+// It automatically uses the Launch Darkly package and names the file by simply lower casing the resource's
+// first character.
+func dynatraceResource(mod string, res string) tokens.Type {
+	return dynatraceTypeDefaultFile(mod, res)
+}
+
 // Provider returns additional overlaid schema and metadata associated with the provider..
 func Provider() tfbridge.ProviderInfo {
+	// Instantiate the Terraform provider
+	p := shimv2.NewProvider(dynatrace.Provider())
+
 	// Create a Pulumi provider mapping
 	prov := tfbridge.ProviderInfo{
-		// Instantiate the Terraform provider
-		P:       shimv2.NewProvider(dynatrace.Provider()),
-		Name:    "dynatrace",
-		Version: version.Version,
-		// DisplayName is a way to be able to change the casing of the provider
-		// name when being displayed on the Pulumi registry
-		DisplayName: "",
-		// The default publisher for all packages is Pulumi.
-		// Change this to your personal name (or a company name) that you
-		// would like to be shown in the Pulumi Registry if this package is published
-		// there.
-		Publisher: "alvaroblazquez4567",
-		// LogoURL is optional but useful to help identify your package in the Pulumi Registry
-		// if this package is published there.
-		//
-		// You may host a logo on a domain you control or add an SVG logo for your package
-		// in your repository and use the raw content URL for that file as your logo URL.
-		LogoURL: "",
-		// PluginDownloadURL is an optional URL used to download the Provider
-		// for use in Pulumi programs
-		// e.g https://github.com/org/pulumi-provider-name/releases/
-		PluginDownloadURL: "",
-		Description:       "A Pulumi package for creating and managing dynatrace cloud resources.",
-		// category/cloud tag helps with categorizing the package in the Pulumi Registry.
-		// For all available categories, see `Keywords` in
-		// https://www.pulumi.com/docs/guides/pulumi-packages/schema/#package.
-		Keywords:   []string{"alvaroblazquez4567", "dynatrace", "category/cloud"},
-		License:    "Apache-2.0",
-		Homepage:   "https://www.pulumi.com",
-		Repository: "https://github.com/alvaroblazquez4567/pulumi-dynatrace",
-		// The GitHub Org for the provider - defaults to `terraform-providers`. Note that this
-		// should match the TF provider module's require directive, not any replace directives.
-		GitHubOrg:    "",
-		MetadataInfo: tfbridge.NewProviderMetadata(metadata),
-		Config:       map[string]*tfbridge.SchemaInfo{
-			// Add any required configuration here, or remove the example below if
-			// no additional points are required.
-			// "region": {
-			// 	Type: tfbridge.MakeType("region", "Region"),
-			// 	Default: &tfbridge.DefaultInfo{
-			// 		EnvVars: []string{"AWS_REGION", "AWS_DEFAULT_REGION"},
-			// 	},
-			// },
+		P:                 p,
+		Name:              "dynatrace",
+		DisplayName:       "Dynatrace",
+		Publisher:         "alvaroblazquez4567",
+		PluginDownloadURL: "github://api.github.com/alvaroblazquez4567",
+		Description:       "A Pulumi package for creating and managing Dynatrace cloud resources.",
+		Keywords:          []string{"pulumi", "dynatrace", "category/infrastructure"},
+		License:           "Apache-2.0",
+		Homepage:          "https://www.pulumi.com",
+		Repository:        "https://github.com/alvaroblazquez4567/pulumi-dynatrace",
+		GitHubOrg:         "dynatrace-oss",
+		Config: map[string]*tfbridge.SchemaInfo{
+			"dt_env_url": {
+				Default: &tfbridge.DefaultInfo{
+					EnvVars: []string{"DYNATRACE_ENV_URL", "DT_ENV_URL"},
+				},
+			},
+			"dt_api_token": {
+				Default: &tfbridge.DefaultInfo{
+					EnvVars: []string{"DYNATRACE_API_TOKEN", "DT_API_TOKEN"},
+				},
+			},
+			"dt_cluster_api_token": {
+				Default: &tfbridge.DefaultInfo{
+					EnvVars: []string{"DYNATRACE_CLUSTER_API_TOKEN", "DT_CLUSTER_API_TOKEN"},
+				},
+			},
+			"dt_cluster_url": {
+				Default: &tfbridge.DefaultInfo{
+					EnvVars: []string{"DYNATRACE_CLUSTER_URL", "DT_CLUSTER_URL"},
+				},
+			},
 		},
 		PreConfigureCallback: preConfigureCallback,
-		Resources:            map[string]*tfbridge.ResourceInfo{
-			// Map each resource in the Terraform provider to a Pulumi type. Two examples
-			// are below - the single line form is the common case. The multi-line form is
-			// needed only if you wish to override types or other default options.
-			//
-			// "aws_iam_role": {Tok: tfbridge.MakeResource(mainPkg, mainMod, "IamRole")}
-			//
-			// "aws_acm_certificate": {
-			// 	Tok: tfbridge.MakeResource(mainPkg, mainMod, "Certificate"),
-			// 	Fields: map[string]*tfbridge.SchemaInfo{
-			// 		"tags": {Type: tfbridge.MakeType(mainPkg, "Tags")},
-			// 	},
-			// },
+		Resources: map[string]*tfbridge.ResourceInfo{
 			"dynatrace_alerting":                      {Tok: dynatraceResource(mainMod, "Alerting")},
 			"dynatrace_activegate_token":              {Tok: dynatraceResource(mainMod, "ActivegateToken")},
 			"dynatrace_activegate_updates":            {Tok: dynatraceResource(mainMod, "ActivegateUpdates")},
@@ -255,9 +279,6 @@ func Provider() tfbridge.ProviderInfo {
 			"dynatrace_xmatters_notification":    {Tok: dynatraceResource(mainMod, "XmattersNotification")},
 		},
 		DataSources: map[string]*tfbridge.DataSourceInfo{
-			// Map each resource in the Terraform provider to a Pulumi function. An example
-			// is below.
-			// "aws_ami": {Tok: tfbridge.MakeDataSource(mainPkg, mainMod, "getAmi")},
 			"dynatrace_alerting_profile":    {Tok: dynatraceDataSource(mainMod, "getAlertingProfile")},
 			"dynatrace_alerting_profiles":   {Tok: dynatraceDataSource(mainMod, "getAlertingProfiles")},
 			"dynatrace_application":         {Tok: dynatraceDataSource(mainMod, "getApplication")},
@@ -280,20 +301,18 @@ func Provider() tfbridge.ProviderInfo {
 				"@types/node": "^10.0.0", // so we can access strongly typed node definitions.
 				"@types/mime": "^2.0.0",
 			},
-			// See the documentation for tfbridge.OverlayInfo for how to lay out this
-			// section, or refer to the AWS provider. Delete this section if there are
-			// no overlay files.
-			//Overlay: &tfbridge.OverlayInfo{},
+			PackageName: "@alvaroblazquez4567/pulumi-dynatrace",
 		},
 		Python: &tfbridge.PythonInfo{
 			// List any Python dependencies and their version ranges
 			Requires: map[string]string{
 				"pulumi": ">=3.0.0,<4.0.0",
 			},
+			PackageName: "lbrlabs_pulumi_dynatrace",
 		},
 		Golang: &tfbridge.GolangInfo{
-			ImportBasePath: path.Join(
-				"github.com/alvaroblazquez4567/pulumi-dynatrace/sdk/",
+			ImportBasePath: filepath.Join(
+				fmt.Sprintf("github.com/pulumi/pulumi-%[1]s/sdk/", mainPkg),
 				tfbridge.GetModuleMajorVersion(version.Version),
 				"go",
 				mainPkg,
@@ -304,17 +323,18 @@ func Provider() tfbridge.ProviderInfo {
 			PackageReferences: map[string]string{
 				"Pulumi": "3.*",
 			},
+			RootNamespace: "Lbrlabs.PulumiPackage",
 		},
 	}
 
-	// These are new API's that you may opt to use to automatically compute resource
-	// tokens, and apply auto aliasing for full backwards compatibility.  For more
-	// information, please reference:
-	// https://pkg.go.dev/github.com/pulumi/pulumi-terraform-bridge/v3/pkg/tfbridge#ProviderInfo.ComputeTokens
-	prov.MustComputeTokens(tokens.SingleModule("dynatrace_", mainMod,
-		tokens.MakeStandard(mainPkg)))
-	prov.MustApplyAutoAliases()
+	err := x.ComputeDefaults(&prov, x.TokensSingleModule("dynatrace_", mainMod,
+		x.MakeStandardToken(mainPkg)))
+	contract.AssertNoErrorf(err, "failed to compute default token mappings")
+
+	prov.SetAutonaming(255, "-")
+
 	prov.SetAutonaming(255, "-")
 
 	return prov
 }
+
