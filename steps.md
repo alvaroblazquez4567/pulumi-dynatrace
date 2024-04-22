@@ -21,3 +21,10 @@ make tfgen
 
 6. add resource mapping
 6.1 add data source mapping
+6.2 copy functions from old provider
+
+7. make provider
+
+8. cd sdk && go mod tidy && cd -
+
+9. make lint_provider
