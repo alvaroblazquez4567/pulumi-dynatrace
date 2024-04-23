@@ -4,7 +4,7 @@ on:
     tags:
       - v*.*.*
 env:
-  GITHUB_TOKEN: ${{ GH_TOKEN }}
+  GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
 jobs:
   publish_binary:
     name: publish
